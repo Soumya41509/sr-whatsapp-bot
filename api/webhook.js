@@ -1,11 +1,11 @@
-import axios from "axios";
+import axios from "axios/dist/browser/axios.js";
 
 export default async function handler(req, res) {
   const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
   const TOKEN = process.env.WHATSAPP_TOKEN;
   const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 
-  // Handle Webhook Verification (GET)
+  // Webhook verification
   if (req.method === "GET") {
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
@@ -13,12 +13,12 @@ export default async function handler(req, res) {
 
     if (mode === "subscribe" && token === VERIFY_TOKEN) {
       return res.status(200).send(challenge);
-    } else {
-      return res.status(403).send("Verification failed");
     }
+
+    return res.status(403).send("Verification failed");
   }
 
-  // Handle Incoming Webhook Messages (POST)
+  // Incoming messages
   if (req.method === "POST") {
     console.log("POST RECEIVED:", JSON.stringify(req.body, null, 2));
 
@@ -48,11 +48,11 @@ export default async function handler(req, res) {
       }
 
       return res.status(200).send("EVENT_RECEIVED");
-    } catch (err) {
-      console.error("Error sending reply:", err);
+    } catch (error) {
+      console.error("Reply Error:", error);
       return res.status(500).send("Server Error");
     }
   }
 
-  res.status(404).send("Not Found");
+  return res.status(404).send("Not Found");
 }
