@@ -1,11 +1,9 @@
-import axios from "axios/dist/browser/axios.js";
-
 export default async function handler(req, res) {
   const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
   const TOKEN = process.env.WHATSAPP_TOKEN;
   const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 
-  // Webhook verification
+  // Webhook Verification
   if (req.method === "GET") {
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
@@ -18,7 +16,7 @@ export default async function handler(req, res) {
     return res.status(403).send("Verification failed");
   }
 
-  // Incoming messages
+  // Handle Incoming Messages
   if (req.method === "POST") {
     console.log("POST RECEIVED:", JSON.stringify(req.body, null, 2));
 
@@ -30,29 +28,31 @@ export default async function handler(req, res) {
         const from = message.from;
         const text = message.text?.body;
 
-        await axios.post(
+        // Use native fetch instead of axios
+        await fetch(
           `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`,
           {
-            messaging_product: "whatsapp",
-            to: from,
-            type: "text",
-            text: { body: `You said: ${text}` }
-          },
-          {
+            method: "POST",
             headers: {
               Authorization: `Bearer ${TOKEN}`,
               "Content-Type": "application/json"
-            }
+            },
+            body: JSON.stringify({
+              messaging_product: "whatsapp",
+              to: from,
+              type: "text",
+              text: { body: `You said: ${text}` }
+            })
           }
         );
       }
 
       return res.status(200).send("EVENT_RECEIVED");
     } catch (error) {
-      console.error("Reply Error:", error);
+      console.error("Reply error:", error);
       return res.status(500).send("Server Error");
     }
   }
 
-  return res.status(404).send("Not Found");
+  res.status(404).send("Not Found");
 }
