@@ -1,9 +1,7 @@
-export default async function handler(req, res) {
+export default function handler(req, res) {
   const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
-  const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
-  const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 
-  // For Webhook Verification (GET)
+  // For webhook verification
   if (req.method === "GET") {
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
@@ -12,15 +10,15 @@ export default async function handler(req, res) {
     if (mode === "subscribe" && token === VERIFY_TOKEN) {
       return res.status(200).send(challenge);
     } else {
-      return res.status(403).send("Verification failed");
+      return res.status(403).send("Failed");
     }
   }
 
-  // For Webhook Messaging (POST)
+  // For receiving webhook POST
   if (req.method === "POST") {
-    console.log("Webhook POST Body:", req.body);
-    return res.status(200).send("EVENT_RECEIVED");
+    console.log("POST RECEIVED:", req.body);
+    return res.status(200).send("OK");
   }
 
-  return res.status(404).send("Not found");
+  return res.status(404).send("Not Found");
 }
