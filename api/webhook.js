@@ -1,21 +1,19 @@
 // =======================================================
-//  WHATSAPP BOT — FINAL VERSION (Multi-user + Smart AI Replies)
-//  Users: Soumyaranjan (918917472082), Sitesh (917848850967)
+//  WHATSAPP BOT — COMMONJS VERSION (VERCEL SAFE)
 // =======================================================
 
-// ALLOWED USERS WITH SEPARATE STORAGE
+// ✔ Fetch for Node.js (CommonJS Compatible)
+const fetch = (...args) =>
+  import("node-fetch").then(({ default: fetch }) => fetch(...args));
+
+// ✔ Allowed users
 const USERS = {
-  "918917472082": {
-    name: "Soumyaranjan",
-    storage: {}
-  },
-  "917848850967": {
-    name: "Sitesh",
-    storage: {}
-  }
+  "918917472082": { name: "Soumyaranjan", storage: {} },
+  "917848850967": { name: "Sitesh", storage: {} }
 };
 
-export default async function handler(req, res) {
+// EXPORT USING COMMONJS
+module.exports = async function handler(req, res) {
   const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
   const TOKEN = process.env.WHATSAPP_TOKEN;
   const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
@@ -31,11 +29,12 @@ export default async function handler(req, res) {
     if (mode === "subscribe" && token === VERIFY_TOKEN) {
       return res.status(200).send(challenge);
     }
+
     return res.status(403).send("Verification failed");
   }
 
   // =======================================================
-  // INCOMING MESSAGE (POST)
+  // HANDLE POST (MESSAGES)
   // =======================================================
   if (req.method === "POST") {
     try {
@@ -43,100 +42,98 @@ export default async function handler(req, res) {
       const changes = entry?.changes?.[0];
       const message = changes?.value?.messages?.[0];
 
-      if (message) {
-        const from = message.from;
-        const number = from.replace(/[^0-9]/g, "");
-        const text = message.text?.body?.trim() || "";
-
-        // ONLY ALLOWED USERS
-        if (!USERS[number]) {
-          console.log("❌ Unauthorized user:", number);
-          return res.status(200).send("IGNORED");
-        }
-
-        const user = USERS[number];
-        console.log(`✔ Message received from ${user.name}: ${text}`);
-
-        // GENERATE SMART REPLY
-        const reply = handleSmartReply(user, text);
-
-        // SEND MESSAGE
-        await fetch(
-          `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${TOKEN}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              messaging_product: "whatsapp",
-              to: from,
-              type: "text",
-              text: { body: reply },
-            }),
-          }
-        );
+      if (!message) {
+        return res.status(200).send("NO_MESSAGE");
       }
+
+      const from = message.from;
+      const number = from.replace(/[^0-9]/g, "");
+      const text = message.text?.body?.trim() || "";
+
+      // User not allowed
+      if (!USERS[number]) {
+        console.log("❌ Unauthorized user:", number);
+        return res.status(200).send("IGNORED");
+      }
+
+      const user = USERS[number];
+
+      // Generate smart reply
+      const reply = generateReply(user, text);
+
+      // SEND REPLY
+      await fetch(
+        `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${TOKEN}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            messaging_product: "whatsapp",
+            to: from,
+            type: "text",
+            text: { body: reply }
+          })
+        }
+      );
 
       return res.status(200).send("EVENT_RECEIVED");
     } catch (err) {
-      console.error("Reply error:", err);
+      console.error("❌ SERVER ERROR:", err);
       return res.status(500).send("SERVER ERROR");
     }
   }
 
-  return res.status(404).send("Not Found");
-}
+  res.status(404).send("Not Found");
+};
 
 // =======================================================
-// SMART AI REPLY SYSTEM
+// SMART REPLY SYSTEM
 // =======================================================
-function handleSmartReply(user, text) {
+
+function generateReply(user, text) {
   const lower = text.toLowerCase();
 
-  // 1) Greetings
+  // GREETING
   if (/^(hi|hello|hey|hii|hiii)$/i.test(text)) {
     return `Hello ${user.name}! 👋\nHow can I help you today?`;
   }
 
-  // 2) Thank you response
+  // THANK YOU
   if (lower.includes("thank")) {
     return `Always here for you, ${user.name}! 🤝`;
   }
 
-  // 3) Natural-language reminder parsing
-  const reminderRegex =
+  // NATURAL REMINDER PARSER
+  const regex =
     /(remind|reminder).*?(at|@)?\s*([0-9:.apm ]+)\s*(to|for)?\s*(.*)/i;
 
-  const match = text.match(reminderRegex);
+  const match = text.match(regex);
 
   if (match) {
     const time = match[3]?.trim();
     const task = match[5]?.trim();
 
     if (time && task) {
-      user.storage.lastReminder = {
-        time,
-        task,
-        created: Date.now(),
-      };
+      user.storage.lastReminder = { time, task, created: Date.now() };
 
-      return `⏰ *Reminder set successfully!*\nTime: *${time}*\nTask: *${task}*\n(I will trigger it from automation flow)`;
+      return `⏰ *Reminder set!*\nTime: *${time}*\nTask: *${task}*`;
     }
 
-    return `Format thoda galat hai ${user.name}!\nUse like:\n*remind me at 5pm to drink water*`;
+    return `Format sahi nahi hai ${user.name}.\nUse:\nremind me at 8pm to drink water`;
   }
 
-  // 4) Show last reminder
+  // LAST REMINDER
   if (lower === "last reminder") {
     if (user.storage.lastReminder) {
       const r = user.storage.lastReminder;
-      return `📝 *Your Last Reminder:*\nTime: *${r.time}*\nTask: *${r.task}*`;
+      return `📝 *Last Reminder:*\nTime: *${r.time}*\nTask: *${r.task}*`;
     }
-    return `No reminder saved yet, ${user.name}!`;
+    return `Koi reminder saved nahi hai ${user.name}!`;
   }
 
-  // 5) Default Personalized
+  // DEFAULT REPLY
   return `${user.name}, you said: ${text}`;
 }
