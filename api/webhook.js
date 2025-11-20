@@ -1,13 +1,13 @@
-// ==========================
-//  WHATSAPP BOT — FINAL VERSION (Soumyaranjan + Sitesh)
-//  Multi-user, Personalized Replies, Reminders, Smart Chat
-// ==========================
+// =======================================================
+//  WHATSAPP BOT — FINAL VERSION (Multi-user + Smart AI Replies)
+//  Users: Soumyaranjan (918917472082), Sitesh (917848850967)
+// =======================================================
 
-// ▪ Authorized users
+// ALLOWED USERS WITH SEPARATE STORAGE
 const USERS = {
   "918917472082": {
     name: "Soumyaranjan",
-    storage: {}      // yaha user-specific data store hoga
+    storage: {}
   },
   "917848850967": {
     name: "Sitesh",
@@ -20,9 +20,9 @@ export default async function handler(req, res) {
   const TOKEN = process.env.WHATSAPP_TOKEN;
   const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 
-  // ==========================
-  // 🔵 WEBHOOK VERIFICATION (GET)
-  // ==========================
+  // =======================================================
+  // WEBHOOK VERIFICATION (GET)
+  // =======================================================
   if (req.method === "GET") {
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
@@ -34,42 +34,33 @@ export default async function handler(req, res) {
     return res.status(403).send("Verification failed");
   }
 
-  // ==========================
-  // 🟢 INCOMING MESSAGE (POST)
-  // ==========================
+  // =======================================================
+  // INCOMING MESSAGE (POST)
+  // =======================================================
   if (req.method === "POST") {
     try {
-      const body = req.body;
-      console.log("POST RECEIVED:", JSON.stringify(body, null, 2));
-
-      const entry = body.entry?.[0];
+      const entry = req.body.entry?.[0];
       const changes = entry?.changes?.[0];
       const message = changes?.value?.messages?.[0];
 
       if (message) {
         const from = message.from;
-        const normalized = from.replace(/[^0-9]/g, "");
+        const number = from.replace(/[^0-9]/g, "");
         const text = message.text?.body?.trim() || "";
 
-        // ==========================
-        // ❌ BLOCK OTHERS
-        // ==========================
-        if (!USERS[normalized]) {
-          console.log("❌ Not allowed:", from);
+        // ONLY ALLOWED USERS
+        if (!USERS[number]) {
+          console.log("❌ Unauthorized user:", number);
           return res.status(200).send("IGNORED");
         }
 
-        const user = USERS[normalized];
-        console.log(`✔ Allowed user: ${user.name} (${from}) → ${text}`);
+        const user = USERS[number];
+        console.log(`✔ Message received from ${user.name}: ${text}`);
 
-        // ==========================
-        // SMART REPLY
-        // ==========================
-        let reply = handleSmartReply(user, text);
+        // GENERATE SMART REPLY
+        const reply = handleSmartReply(user, text);
 
-        // ==========================
-        // SEND REPLY
-        // ==========================
+        // SEND MESSAGE
         await fetch(
           `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`,
           {
@@ -99,28 +90,25 @@ export default async function handler(req, res) {
 }
 
 // =======================================================
-// 🔥 SMART REPLY BRAIN
+// SMART AI REPLY SYSTEM
 // =======================================================
 function handleSmartReply(user, text) {
+  const lower = text.toLowerCase();
 
-  // ==========================
-  // 1) Greetings (SPECIAL)
-  // ==========================
-  if (/^(hi|hello|hey)$/i.test(text)) {
-    return `Hello ${user.name}! 👋\nHow can I help you?`;
+  // 1) Greetings
+  if (/^(hi|hello|hey|hii|hiii)$/i.test(text)) {
+    return `Hello ${user.name}! 👋\nHow can I help you today?`;
   }
 
-  // ==========================
-  // 2) THANK YOU reply
-  // ==========================
-  if (/thank/i.test(text)) {
+  // 2) Thank you response
+  if (lower.includes("thank")) {
     return `Always here for you, ${user.name}! 🤝`;
   }
 
-  // ==========================
-  // 3) REMINDER PARSING (natural language)
-  // ==========================
-  const reminderRegex = /(remind|reminder).*?(at|@)?\s*([0-9:apm ]+)\s*(to|for)?\s*(.*)/i;
+  // 3) Natural-language reminder parsing
+  const reminderRegex =
+    /(remind|reminder).*?(at|@)?\s*([0-9:.apm ]+)\s*(to|for)?\s*(.*)/i;
+
   const match = text.match(reminderRegex);
 
   if (match) {
@@ -128,30 +116,27 @@ function handleSmartReply(user, text) {
     const task = match[5]?.trim();
 
     if (time && task) {
-      // SAVE user-specific reminder
       user.storage.lastReminder = {
         time,
         task,
-        created: Date.now()
+        created: Date.now(),
       };
 
-      return `⏰ Reminder set successfully!\nTime: *${time}*\nTask: *${task}*\n(I will trigger through n8n)`;
+      return `⏰ *Reminder set successfully!*\nTime: *${time}*\nTask: *${task}*\n(I will trigger it from automation flow)`;
     }
+
+    return `Format thoda galat hai ${user.name}!\nUse like:\n*remind me at 5pm to drink water*`;
   }
 
-  // ==========================
   // 4) Show last reminder
-  // ==========================
-  if (text.toLowerCase() === "last reminder") {
+  if (lower === "last reminder") {
     if (user.storage.lastReminder) {
       const r = user.storage.lastReminder;
-      return `📝 Your last saved reminder:\nTime: *${r.time}*\nTask: *${r.task}*`;
+      return `📝 *Your Last Reminder:*\nTime: *${r.time}*\nTask: *${r.task}*`;
     }
-    return `Koi reminder saved nahi hai ${user.name}!`;
+    return `No reminder saved yet, ${user.name}!`;
   }
 
-  // ==========================
-  // 5) DEFAULT PERSONALIZED REPLY
-  // ==========================
+  // 5) Default Personalized
   return `${user.name}, you said: ${text}`;
 }
