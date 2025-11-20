@@ -1,15 +1,18 @@
 // =======================================================
-//   WHATSAPP BOT — FINAL FULLY FIXED VERSION (PASTE THIS)
+//  WHATSAPP BOT — FINAL VERSION (Multi-user + Smart AI Replies)
+//  Users: Soumyaranjan (918917472082), Sitesh (917848850967)
 // =======================================================
 
-// ✔ Fetch Fix for Vercel / Node
-const fetch = (...args) =>
-  import("node-fetch").then(({ default: fetch }) => fetch(...args));
-
-// ✔ Allowed Users (Separate data per user)
+// ALLOWED USERS WITH SEPARATE STORAGE
 const USERS = {
-  "918917472082": { name: "Soumyaranjan", storage: {} },
-  "917848850967": { name: "Sitesh", storage: {} }
+  "918917472082": {
+    name: "Soumyaranjan",
+    storage: {}
+  },
+  "917848850967": {
+    name: "Sitesh",
+    storage: {}
+  }
 };
 
 export default async function handler(req, res) {
@@ -21,17 +24,18 @@ export default async function handler(req, res) {
   // WEBHOOK VERIFICATION (GET)
   // =======================================================
   if (req.method === "GET") {
-    if (
-      req.query["hub.mode"] === "subscribe" &&
-      req.query["hub.verify_token"] === VERIFY_TOKEN
-    ) {
-      return res.status(200).send(req.query["hub.challenge"]);
+    const mode = req.query["hub.mode"];
+    const token = req.query["hub.verify_token"];
+    const challenge = req.query["hub.challenge"];
+
+    if (mode === "subscribe" && token === VERIFY_TOKEN) {
+      return res.status(200).send(challenge);
     }
     return res.status(403).send("Verification failed");
   }
 
   // =======================================================
-  // HANDLE POST / MESSAGES
+  // INCOMING MESSAGE (POST)
   // =======================================================
   if (req.method === "POST") {
     try {
@@ -39,48 +43,45 @@ export default async function handler(req, res) {
       const changes = entry?.changes?.[0];
       const message = changes?.value?.messages?.[0];
 
-      // No message received
-      if (!message) {
-        return res.status(200).send("NO_MESSAGE");
-      }
+      if (message) {
+        const from = message.from;
+        const number = from.replace(/[^0-9]/g, "");
+        const text = message.text?.body?.trim() || "";
 
-      const from = message.from;
-      const number = from.replace(/[^0-9]/g, "");
-      const text = message.text?.body?.trim() || "";
-
-      // Unknown user → ignore
-      if (!USERS[number]) {
-        console.log("❌ Unauthorized user:", number);
-        return res.status(200).send("IGNORED");
-      }
-
-      const user = USERS[number];
-      console.log(`✔ Message from ${user.name}: ${text}`);
-
-      // Generate smart reply
-      const reply = generateReply(user, text);
-
-      // Send reply
-      await fetch(
-        `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${TOKEN}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            messaging_product: "whatsapp",
-            to: from,
-            type: "text",
-            text: { body: reply }
-          }),
+        // ONLY ALLOWED USERS
+        if (!USERS[number]) {
+          console.log("❌ Unauthorized user:", number);
+          return res.status(200).send("IGNORED");
         }
-      );
+
+        const user = USERS[number];
+        console.log(`✔ Message received from ${user.name}: ${text}`);
+
+        // GENERATE SMART REPLY
+        const reply = handleSmartReply(user, text);
+
+        // SEND MESSAGE
+        await fetch(
+          `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${TOKEN}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              messaging_product: "whatsapp",
+              to: from,
+              type: "text",
+              text: { body: reply },
+            }),
+          }
+        );
+      }
 
       return res.status(200).send("EVENT_RECEIVED");
     } catch (err) {
-      console.error("❌ Reply error:", err);
+      console.error("Reply error:", err);
       return res.status(500).send("SERVER ERROR");
     }
   }
@@ -89,23 +90,22 @@ export default async function handler(req, res) {
 }
 
 // =======================================================
-// SMART REPLY LOGIC
+// SMART AI REPLY SYSTEM
 // =======================================================
-
-function generateReply(user, text) {
+function handleSmartReply(user, text) {
   const lower = text.toLowerCase();
 
-  // 1️⃣ Greet
+  // 1) Greetings
   if (/^(hi|hello|hey|hii|hiii)$/i.test(text)) {
     return `Hello ${user.name}! 👋\nHow can I help you today?`;
   }
 
-  // 2️⃣ Thank you
+  // 2) Thank you response
   if (lower.includes("thank")) {
     return `Always here for you, ${user.name}! 🤝`;
   }
 
-  // 3️⃣ Natural Reminder (AI-like parsing)
+  // 3) Natural-language reminder parsing
   const reminderRegex =
     /(remind|reminder).*?(at|@)?\s*([0-9:.apm ]+)\s*(to|for)?\s*(.*)/i;
 
@@ -116,24 +116,27 @@ function generateReply(user, text) {
     const task = match[5]?.trim();
 
     if (time && task) {
-      // Store it separately for each user
-      user.storage.lastReminder = { time, task, created: Date.now() };
+      user.storage.lastReminder = {
+        time,
+        task,
+        created: Date.now(),
+      };
 
-      return `⏰ *Reminder added!*\nTime: *${time}*\nTask: *${task}*`;
+      return `⏰ *Reminder set successfully!*\nTime: *${time}*\nTask: *${task}*\n(I will trigger it from automation flow)`;
     }
 
-    return `Format sahi nahi hai ${user.name}.\nExample: remind me at 8pm to drink water`;
+    return `Format thoda galat hai ${user.name}!\nUse like:\n*remind me at 5pm to drink water*`;
   }
 
-  // 4️⃣ Check last reminder
+  // 4) Show last reminder
   if (lower === "last reminder") {
     if (user.storage.lastReminder) {
       const r = user.storage.lastReminder;
-      return `📝 *Last Reminder:*\nTime: *${r.time}*\nTask: *${r.task}*`;
+      return `📝 *Your Last Reminder:*\nTime: *${r.time}*\nTask: *${r.task}*`;
     }
     return `No reminder saved yet, ${user.name}!`;
   }
 
-  // 5️⃣ Default personalized response
+  // 5) Default Personalized
   return `${user.name}, you said: ${text}`;
 }
