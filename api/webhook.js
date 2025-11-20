@@ -1,16 +1,16 @@
 // ==========================
-//  WHATSAPP BOT — FINAL VERSION
-//  Multi-user, Separate Data, Smart Chat, Reminder Parsing
+//  WHATSAPP BOT — FINAL VERSION (Soumyaranjan + Sitesh)
+//  Multi-user, Personalized Replies, Reminders, Smart Chat
 // ==========================
 
-// ▪ Authorized numbers ONLY
+// ▪ Authorized users
 const USERS = {
   "918917472082": {
-    name: "Soumya",
+    name: "Soumyaranjan",
     storage: {}      // yaha user-specific data store hoga
   },
   "917848850967": {
-    name: "Friend",
+    name: "Sitesh",
     storage: {}
   }
 };
@@ -52,7 +52,7 @@ export default async function handler(req, res) {
         const text = message.text?.body?.trim() || "";
 
         // ==========================
-        // ❌ BLOCK UNAUTHORIZED USERS
+        // ❌ BLOCK OTHERS
         // ==========================
         if (!USERS[normalized]) {
           console.log("❌ Not allowed:", from);
@@ -63,12 +63,12 @@ export default async function handler(req, res) {
         console.log(`✔ Allowed user: ${user.name} (${from}) → ${text}`);
 
         // ==========================
-        // 🔵 SMART REPLY LOGIC
+        // SMART REPLY
         // ==========================
         let reply = handleSmartReply(user, text);
 
         // ==========================
-        // 🟢 SEND MESSAGE BACK
+        // SEND REPLY
         // ==========================
         await fetch(
           `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`,
@@ -99,58 +99,59 @@ export default async function handler(req, res) {
 }
 
 // =======================================================
-// 🔥 MAIN BRAIN — USER-SPECIFIC CHAT & REMINDER HANDLING
+// 🔥 SMART REPLY BRAIN
 // =======================================================
 function handleSmartReply(user, text) {
 
   // ==========================
-  // 1) GREETING
+  // 1) Greetings (SPECIAL)
   // ==========================
-  if (/hi|hello|hey/i.test(text)) {
-    return `Hello ${user.name}! 👋  
-Bol bata kya kaam hai?`;
+  if (/^(hi|hello|hey)$/i.test(text)) {
+    return `Hello ${user.name}! 👋\nHow can I help you?`;
   }
 
   // ==========================
-  // 2) REMINDER PARSER
+  // 2) THANK YOU reply
   // ==========================
-  if (text.toLowerCase().startsWith("remind:")) {
+  if (/thank/i.test(text)) {
+    return `Always here for you, ${user.name}! 🤝`;
+  }
 
-    const parts = text.replace("remind:", "").trim().split(",");
-    const reminderTime = parts[0]?.trim();
-    const reminderTask = parts[1]?.trim();
+  // ==========================
+  // 3) REMINDER PARSING (natural language)
+  // ==========================
+  const reminderRegex = /(remind|reminder).*?(at|@)?\s*([0-9:apm ]+)\s*(to|for)?\s*(.*)/i;
+  const match = text.match(reminderRegex);
 
-    if (reminderTime && reminderTask) {
-      // store user-specific reminder
+  if (match) {
+    const time = match[3]?.trim();
+    const task = match[5]?.trim();
+
+    if (time && task) {
+      // SAVE user-specific reminder
       user.storage.lastReminder = {
-        time: reminderTime,
-        task: reminderTask,
+        time,
+        task,
         created: Date.now()
       };
 
-      return `⏰ *Reminder Added!*  
-Time: *${reminderTime}*  
-Task: *${reminderTask}*  
-(Bhai abhi ye save ho gaya — actual trigger n8n se hoga 🎯)`;
+      return `⏰ Reminder set successfully!\nTime: *${time}*\nTask: *${task}*\n(I will trigger through n8n)`;
     }
-
-    return "Format galat hai bhai 🤦‍♂️\nUse:  
-*remind: 5pm, pani peena* 💧";
   }
 
   // ==========================
-  // 3) USER-SPECIFIC DATA TESTING
+  // 4) Show last reminder
   // ==========================
-  if (text === "last reminder") {
+  if (text.toLowerCase() === "last reminder") {
     if (user.storage.lastReminder) {
       const r = user.storage.lastReminder;
-      return `📝 *Your Last Reminder*\nTime: ${r.time}\nTask: ${r.task}`;
+      return `📝 Your last saved reminder:\nTime: *${r.time}*\nTask: *${r.task}*`;
     }
-    return "Koi reminder saved nahi hai bhai!";
+    return `Koi reminder saved nahi hai ${user.name}!`;
   }
 
   // ==========================
-  // 4) DEFAULT REPLY
+  // 5) DEFAULT PERSONALIZED REPLY
   // ==========================
   return `${user.name}, you said: ${text}`;
 }
